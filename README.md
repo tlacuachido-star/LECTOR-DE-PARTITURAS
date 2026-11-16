@@ -1,9 +1,27 @@
-# Lector de partituras V3
+# Lector experimental de partituras — V4
 
-Detector experimental de notas escritas en clave de Sol. La V3 recupera una búsqueda amplia de cabezas de nota y calcula su altura usando las cinco líneas de cada pentagrama. Permite corrección manual, imagen anotada y CSV por compases aproximados.
+Aplicación en Streamlit para subir una imagen de partitura, detectar notas aproximadas y producir:
 
-## Publicar en Streamlit
-Reemplaza `app.py`, `requirements.txt` y `README.md` en la rama `main` de GitHub. Streamlit Cloud redeplegará automáticamente.
+- una imagen anotada con nombres DO, RE, MI, FA, SOL, LA, SI;
+- una tabla editable de notas;
+- una lista agrupada por compás;
+- exportación a PNG y CSV.
 
-## Advertencias
-No es reconocimiento musical entrenado ni validado. Puede omitir notas o marcar símbolos falsos. No interpreta armaduras, alteraciones ni compases de forma confiable. La confianza es una heurística, no una probabilidad calibrada. Revisa los resultados antes de tocar.
+## Cambios de V4
+
+- Ajuste de alturas usando la referencia de **clave de Sol**.
+- Exclusión más fuerte de la zona de clave, armadura y compás al inicio del sistema.
+- Detección por coincidencia de **cabezas de nota** (óvalos llenos y huecos).
+- Menos falsos positivos en textos y símbolos verticales.
+- Sensibilidad inicial en **65%**.
+
+## Ejecución local
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+## Nota
+
+Sigue siendo una herramienta experimental. Las armaduras, alteraciones, ligaduras y compases son aproximados y deben revisarse manualmente antes de usar la transcripción.
