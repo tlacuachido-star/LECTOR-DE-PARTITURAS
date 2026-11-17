@@ -184,7 +184,142 @@ def candidatos_automaticos_v3(rgb, pentagramas, tinta, horizontal, sensibilidad=
     return salida
 
 
+
+def centro_blanca_cercana(rgb, x_clic, y_clic, pentagrama, radio=1.35):
+    """Busca el hueco rodeado por tinta de una nota blanca cerca del clic.
+
+    Una cabeza blanca NO tiene un núcleo negro: las operaciones usadas para las
+    negras destruyen su contorno. RETR_TREE localiza el interior claro encerrado
+    por el trazo exterior, incluso si la plica está unida a la cabeza.
+
+    Se prioriza un interior ovalado de tamaño musical plausible, se limita la
+    búsqueda al clic y al pentagrama, y se comprueba que haya tinta alrededor.
+    No analiza el resto de la página ni crea notas automáticamente.
+    """
+    d = float(pentagrama['distancia'])
+    h, w = rgb.shape[:2]
+    x_clic, y_clic = float(x_clic), float(y_clic)
+    margen = max(12, int(np.ceil(d * 3.5)))
+    x0 = max(0, int(x_clic) - margen)
+    y0 = max(0, int(y_clic) - margen)
+    x1 = min(w, int(x_clic) + margen + 1)
+    y1 = min(h, int(y_clic) + margen + 1)
+    if x1 <= x0 or y1 <= y0:
+        return None
+
+    gris = cv2.cvtColor(rgb[y0:y1, x0:x1], cv2.COLOR_RGB2GRAY)
+    # Un umbral fijo alto mantiene cerrado el óvalo claro aun cuando el clic
+    # desplaza el recorte (Otsu local abría y rompía el contorno del mismo óvalo).
+    tinta = cv2.threshold(gris, 205, 255, cv2.THRESH_BINARY_INV)[1]
+    contornos, jerarquia = cv2.findContours(tinta, cv2.RETR_TREE,
+                                           cv2.CHAIN_APPROX_SIMPLE)
+    if jerarquia is None:
+        return None
+
+    propuestas = []
+    for i, contorno in enumerate(contornos):
+        # Los interiores blancos son hijos de un contorno exterior negro.
+        if jerarquia[0][i][3] < 0:
+            continue
+        bx, by, bw, bh = cv2.boundingRect(contorno)
+        area = float(cv2.contourArea(contorno))
+        if not (0.65*d <= bw <= 1.8*d and 0.32*d <= bh <= 1.18*d):
+            continue
+        if not (0.13*d*d <= area <= 0.95*d*d):
+            continue
+        if not (1.05 <= bw / max(1, bh) <= 3.3):
+            continue
+        if area / (bw*bh) < 0.32:
+            continue
+
+        m = cv2.moments(contorno)
+        if m['m00'] <= 0:
+            continue
+        cx = x0 + m['m10'] / m['m00']
+        cy = y0 + m['m01'] / m['m00']
+        dx, dy = cx-x_clic, cy-y_clic
+        distancia = float(np.hypot(dx, dy))
+        if abs(dx) > radio*d or abs(dy) > radio*d or distancia > radio*d:
+            continue
+
+        paso = (pentagrama['lineas'][-1] - cy) / (d/2.0)
+        error = abs(paso - round(paso))
+        # Aceptamos descentrados leves por el contorno grueso y el pentagrama.
+        if error > 0.49:
+            continue
+
+        # Requerir tinta que rodee al interior: diferencia con los fondos y
+        # orificios anómalos en los extremos de una plica.
+        # Se prueba un anillo alrededor de la elipse, sin incluir el blanco.
+        radx = max(3, int(round(bw / 2 + 1.5)))
+        rady = max(3, int(round(bh / 2 + 1.5)))
+        xx0, xx1 = max(0, int(cx-x0)-radx), min(tinta.shape[1], int(cx-x0)+radx+1)
+        yy0, yy1 = max(0, int(cy-y0)-rady), min(tinta.shape[0], int(cy-y0)+rady+1)
+        parche = tinta[yy0:yy1, xx0:xx1]
+        tinta_cercana = np.count_nonzero(parche) / max(1, parche.size)
+        if tinta_cercana < 0.10:
+            continue
+
+        # El interior de una blanca debe seguir siendo mayoritariamente claro.
+        # Esto impide que un agujero junto a una negra (o su plica) tenga
+        # prioridad sobre la detección normal, que ya funcionaba en V5.1.
+        icx, icy = int(round(cx-x0)), int(round(cy-y0))
+        centro = gris[max(0,icy-1):min(gris.shape[0],icy+2),
+                      max(0,icx-1):min(gris.shape[1],icx+2)]
+        centro_amplio = gris[max(0,icy-2):min(gris.shape[0],icy+3),
+                             max(0,icx-2):min(gris.shape[1],icx+3)]
+        if (np.mean(centro < 170) > 0.70 or
+                np.mean(centro_amplio < 170) > 0.70):
+            continue
+
+        # Mayor área ovalada es preferible a agujeros secundarios de plicas.
+        bonus_forma = 0.25*d * min((area / (bw*bh)) / 0.60, 1.0)
+        # Se privilegia el hueco principal, más grande y estable, frente
+        # a un segundo agujero artificial creado por la línea del pentagrama.
+        puntuacion = 0.36*distancia - 2.8*area/d - 0.20*bonus_forma + 0.10*d*error
+        propuestas.append((puntuacion, cx, cy, area))
+
+    if not propuestas:
+        return None
+    _, cx_principal, cy_principal, _ = min(propuestas)
+    # En las notas blancas que atraviesan una línea, el interior se divide
+    # en dos huecos. Promediar sus centros evita leer FA como SOL por usar
+    # únicamente el hueco superior.
+    relacionadas = [p for p in propuestas
+                   if abs(p[1]-cx_principal) < 0.60*d
+                   and abs(p[2]-cy_principal) < 1.10*d]
+    pesos = np.array([p[3] for p in relacionadas], dtype=np.float64)
+    cx = float(np.average([p[1] for p in relacionadas], weights=pesos))
+    cy = float(np.average([p[2] for p in relacionadas], weights=pesos))
+    paso = round((pentagrama['lineas'][-1] - cy) / (d / 2.0))
+    cy = pentagrama['lineas'][-1] - paso*d/2.0
+    return int(round(cx)), int(round(cy))
+
+
 def centro_cabeza_cercana(rgb, x_clic, y_clic, pentagrama, radio=1.3):
+    """Ajusta el clic al centro de una cabeza, negra o blanca.
+
+    Combina el detector negro de V5.1 con el contorno hueco de una blanca.
+    Si ambos proponen un centro, conserva la negra cuando el núcleo es sólido.
+    """
+    negra = _centro_negra_cercana(rgb, x_clic, y_clic, pentagrama, radio=radio)
+    blanca = centro_blanca_cercana(rgb, x_clic, y_clic, pentagrama, radio=radio)
+    if negra is not None and blanca is not None:
+        # La V5.1 ya detectaba bien las negras. Una negra real presenta
+        # un núcleo de 5x5 px prácticamente lleno de tinta; no debemos
+        # reemplazarla por un hueco del pentagrama cercano.
+        nx, ny = negra
+        interior = rgb[max(0,ny-2):min(rgb.shape[0],ny+3),
+                       max(0,nx-2):min(rgb.shape[1],nx+3)]
+        if interior.size:
+            interior = cv2.cvtColor(interior, cv2.COLOR_RGB2GRAY)
+        if interior.size and float(np.mean(interior < 170)) >= 0.95:
+            return negra
+        return blanca
+    return blanca if blanca is not None else negra
+
+
+def _centro_negra_cercana(rgb, x_clic, y_clic, pentagrama, radio=1.3):
     """Ajusta un clic cercano al centro de una cabeza de nota real.
 
     Busca componentes ovalados gruesos en una zona pequeña de la imagen, en lugar
