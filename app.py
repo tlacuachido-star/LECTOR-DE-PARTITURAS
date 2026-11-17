@@ -1,4 +1,4 @@
-"""Lector de partituras V5: detección automática opcional y transcripción asistida."""
+"""Lector de partituras V5.1: clic inteligente que se ajusta a cabezas de nota."""
 import hashlib
 import io
 import cv2
@@ -9,12 +9,12 @@ from PIL import Image
 from streamlit_image_coordinates import streamlit_image_coordinates
 from core import (
     detectar_pentagramas, posicion_a_nota, alteracion_armadura,
-    recorte_sistema, dibujar_anotaciones, compas_local, candidatos_automaticos_v3
+    recorte_sistema, dibujar_anotaciones, compas_local, candidatos_automaticos_v3, centro_cabeza_cercana
 )
 
-st.set_page_config(page_title='Lector de partituras V5', layout='wide')
-st.title('🎼 Lector de partituras — DO RE MI · V5')
-st.caption('Modo asistido: tú señalas cada cabeza de nota y el programa calcula el nombre musical según su altura.')
+st.set_page_config(page_title='Lector de partituras V5.1', layout='wide')
+st.title('🎼 Lector de partituras — DO RE MI · V5.1')
+st.caption('Clic inteligente: ajusta el toque al centro de una cabeza cercana antes de leer su altura.')
 
 f = st.file_uploader('1. Sube una partitura JPG o PNG', type=['jpg','jpeg','png'])
 if f is None:
@@ -29,6 +29,7 @@ if st.session_state.get('archivo_actual') != identificador:
     st.session_state.barras_v5 = []
     st.session_state.clics_procesados_v5 = set()
     st.session_state.editor_version_v5 = 0
+    st.session_state.aviso_clic_v5_1 = None
 
 rgb = np.asarray(Image.open(io.BytesIO(contenido)).convert('RGB'))
 if max(rgb.shape[:2]) > 2800:
@@ -69,7 +70,11 @@ with st.expander('Detección automática experimental (opcional)'):
         st.rerun()
 
 st.subheader('2. Pulsa sobre la cabeza de cada nota')
-st.caption('Puedes ampliar cada mitad del pentagrama. El punto verde marca una nota introducida por ti. Una línea verde separa compases.')
+if st.session_state.get('aviso_clic_v5_1'):
+    st.warning(st.session_state.aviso_clic_v5_1)
+    st.session_state.aviso_clic_v5_1 = None
+st.caption('Haz clic cerca de la cabeza ovalada: el programa buscará su centro. Los puntos verdes son tus notas.')
+modo_clic = st.toggle('Ajustar clic al centro de la cabeza de nota (recomendado)', value=True, help='Si no encuentra una cabeza cerca, no agregará una nota equivocada. Desactívalo para introducir notas por posición exacta.')
 c1,c2,c3=st.columns([1,1,1])
 with c1:
     sistema = st.selectbox('Pentagrama',list(range(1,len(pentagramas)+1)),format_func=lambda i:f'Pentagrama {i}')
@@ -86,7 +91,7 @@ escala_vista = 1.65 if mitad != 'Todo' else 1.0
 anotada = dibujar_anotaciones(np.asarray(imagen_base), notas_en_sistema,
                               barras_en_sistema,tipo,cantidad,coordenadas=recuadro,escala=escala_vista)
 
-respuesta = streamlit_image_coordinates(anotada, key=f'clicks-v5-{identificador}-{sistema}-{mitad}')
+respuesta = streamlit_image_coordinates(anotada, key=f'clicks-v5-1-{identificador}-{sistema}-{mitad}')
 if respuesta is not None:
     # Component reports the coordinates and visible dimensions of the displayed image.
     rx = respuesta.get('x')
@@ -102,11 +107,20 @@ if respuesta is not None:
             orig_y = int(recuadro[1]+ry*imagen_base.height/max(1,rh))
             pent = pentagramas[sistema-1]
             if accion=='Añadir nota':
-                n,octava = posicion_a_nota(orig_y,pent)
+                if modo_clic:
+                    ajustada = centro_cabeza_cercana(rgb, orig_x, orig_y, pent)
+                    if ajustada is None:
+                        st.session_state.aviso_clic_v5_1 = 'No encontré una cabeza de nota cerca del clic. Toca más cerca del óvalo o desactiva el ajuste.'
+                    else:
+                        orig_x, orig_y = ajustada
+                if not modo_clic or ajustada is not None:
+                    n,octava = posicion_a_nota(orig_y,pent)
+                else:
+                    n, octava = None, None
                 d = pent['distancia']
                 repetida = any(a['sistema']==sistema and abs(a['x']-orig_x)<.75*d and abs(a['y']-orig_y)<.75*d
                               for a in st.session_state.notas_v5)
-                if not repetida:
+                if not repetida and n is not None:
                     st.session_state.notas_v5.append({'sistema':sistema,'x':orig_x,'y':orig_y,
                                                        'nota':n,'octava':octava,
                                                        'alteracion_manual':'auto','origen':'manual','confianza':1.0})
@@ -172,7 +186,7 @@ st.subheader('4. Descargar imagen y lista por compás')
 result=dibujar_anotaciones(rgb,st.session_state.notas_v5,st.session_state.barras_v5,tipo,cantidad)
 st.image(result,use_container_width=True)
 buf=io.BytesIO();result.save(buf,format='PNG')
-st.download_button('Descargar imagen con nombres PNG',buf.getvalue(),'partitura_con_notas_v5.png','image/png')
+st.download_button('Descargar imagen con nombres PNG',buf.getvalue(),'partitura_con_notas_v5_1.png','image/png')
 if filas:
     salida=tabla.sort_values(['sistema','compas','x']).copy()
     salida['nombre_completo']=salida['nota']+salida['alteracion']
@@ -181,5 +195,5 @@ if filas:
     agrupada.columns=['Pentagrama','Compás local','Notas']
     st.dataframe(agrupada,use_container_width=True,hide_index=True)
     st.download_button('Descargar lista CSV',agrupada.to_csv(index=False).encode('utf-8-sig'),
-                       'notas_por_compas_v5.csv','text/csv')
+                       'notas_por_compas_v5_1.csv','text/csv')
 st.caption('Aviso: cada pentagrama comienza en compás local 1; marca las barras para separar compases. No se reconocen automáticamente accidentales locales, acordes ni ligaduras.')

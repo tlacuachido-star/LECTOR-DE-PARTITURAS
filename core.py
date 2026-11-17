@@ -182,3 +182,64 @@ def candidatos_automaticos_v3(rgb, pentagramas, tinta, horizontal, sensibilidad=
                            'octava':octava,'alteracion_manual':'auto',
                            'origen':'auto','confianza':round(p,2)})
     return salida
+
+
+def centro_cabeza_cercana(rgb, x_clic, y_clic, pentagrama, radio=1.3):
+    """Ajusta un clic cercano al centro de una cabeza de nota real.
+
+    Busca componentes ovalados gruesos en una zona pequeña de la imagen, en lugar
+    de calcular la altura musical usando directamente la posición vertical del clic.
+    Si la imagen no aporta un candidato cercano y convincente, devuelve None.
+
+    El ajuste asistido es conservador y NO sustituye a un reconocedor OMR completo.
+    """
+    d = float(pentagrama['distancia'])
+    alto, ancho = rgb.shape[:2]
+    x_clic, y_clic = float(x_clic), float(y_clic)
+    r = max(8, int(np.ceil(d * 3.4)))
+    x0 = max(0, int(x_clic) - r)
+    y0 = max(0, int(y_clic) - r)
+    x1 = min(ancho, int(x_clic) + r + 1)
+    y1 = min(alto, int(y_clic) + r + 1)
+    if x1 <= x0 or y1 <= y0:
+        return None
+
+    gris = cv2.cvtColor(rgb[y0:y1, x0:x1], cv2.COLOR_RGB2GRAY)
+    _, tinta = cv2.threshold(gris, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    # Lascas horizontales del pentagrama y plicas finas desaparecen al abrir.
+    # Un óvalo grueso suele sobrevivir.
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    gruesa = cv2.morphologyEx(tinta, cv2.MORPH_OPEN, kernel)
+    total, _, estadisticas, centros = cv2.connectedComponentsWithStats(gruesa, 8)
+    opciones = []
+    for i in range(1, total):
+        bx, by, bw, bh, area = [int(v) for v in estadisticas[i]]
+        cx, cy = float(centros[i][0] + x0), float(centros[i][1] + y0)
+        # Un óvalo puede tocar una plica, pero no debe parecer un segmento largo.
+        if not (0.55*d <= bw <= 2.25*d and 0.36*d <= bh <= 1.70*d):
+            continue
+        if not (0.28*d*d <= area <= 2.7*d*d):
+            continue
+        if not (0.55 <= bw/max(1,bh) <= 2.9):
+            continue
+        # Verificar que el centro coincide aproximadamente con una línea/espacio.
+        paso = (pentagrama['lineas'][-1] - cy)/(d/2)
+        err = abs(paso-round(paso))
+        if err > 0.43:
+            continue
+        dx, dy = cx - x_clic, cy - y_clic
+        distancia = np.hypot(dx, dy)
+        # Permitir un poco de error vertical, sin saltar a notas distantes.
+        if abs(dx) > radio*d or abs(dy) > radio*d or distancia > radio*d:
+            continue
+        # No elegir un fragmento más lejano solo por ser grande.
+        opciones.append((distancia + err*0.08*d, cx, cy))
+
+    if not opciones:
+        return None
+    _, cx, cy = min(opciones)
+    # Ajustamos la posición vertical al grado musical detectado; el eje X procede
+    # de la cabeza de la nota. De ese modo un clic ligeramente alto da igual.
+    paso = round((pentagrama['lineas'][-1] - cy)/(d/2))
+    y_afinada = pentagrama['lineas'][-1] - paso*(d/2)
+    return int(round(cx)), int(round(y_afinada))

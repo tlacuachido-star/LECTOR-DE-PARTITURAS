@@ -1,25 +1,22 @@
-# Lector de partituras V5 — modo asistido
+# Lector de partituras V5.1 — clic inteligente
 
-Corrección de la V4: **el reconocimiento automático no es fiable** y se deja como sugerencia opcional. El modo predeterminado es asistido: haces clic en la cabeza de la nota y el programa calcula su altura usando las cinco líneas del pentagrama.
+Permite subir una partitura en JPG/PNG a Streamlit, marcar las notas con un clic, editarlas, exportar la imagen anotada y consultar una lista por compases.
 
-## Cómo usar
+## Corrección de la V5
 
-1. Carga JPG o PNG.
-2. Selecciona armadura (por ejemplo 1 sostenido = FA♯).
-3. Selecciona pentagrama y mitad izquierda o derecha para ver las notas más grandes.
-4. Haz clic sobre **el centro de cada cabeza de nota**. Aparecerá el nombre.
-5. Para separar compases cambia la acción a **Marcar barra** y haz clic sobre las barras verticales.
-6. Para borrar una nota equivocada usa **Borrar nota cercana** o *Deshacer última nota*.
-7. Corrige nombre y alteración en la tabla y descarga PNG o CSV.
+La V5 calculaba la nota con la coordenada `y` exacta del clic, de modo que pulsar un poco encima o debajo podía cambiar SOL por LA, por ejemplo.
 
-## Avisos
+Ahora, con **Ajustar clic al centro de la cabeza de nota**, un pequeño algoritmo de visión por computadora busca el óvalo negro más cercano en la imagen original. Si lo encuentra dentro del radio de tolerancia, usa su centro para calcular DO–RE–MI–FA–SOL–LA–SI. Si no lo encuentra, no añade una nota incorrecta. Puedes desactivar el ajuste para notas huecas o figuras de baja calidad que la detección no encuentre.
 
-- La detección automática heredada de V3 es experimental y no se ejecuta sola.
-- La lectura asistida identifica la altura según la clave de Sol (MI en la línea inferior). El nombre mostrado es el **escrito** para el instrumento, sin transponer a tono de concierto.
-- La armadura se aplica por selección del usuario; no se detectan los accidentales locales automáticamente.
-- Los números de compás son **locales a cada pentagrama** y requieren marcar sus barras para separar notas.
-- No hay que instalar nada en Windows si se ejecuta en Streamlit Cloud.
+La precisión sigue siendo experimental y dependerá de la nitidez y del tipo de grabado. La armadura puede configurarse; otras alteraciones se corrigen manualmente en la tabla.
 
-## Despliegue
+## Instalación en Streamlit Community Cloud
 
-Sube `app.py`, `core.py`, `requirements.txt` y `README.md` a la raíz del repositorio de GitHub y Streamlit recargará la app automáticamente.
+Reemplaza los cuatro archivos del repositorio raíz de GitHub:
+
+- `app.py`
+- `core.py`
+- `requirements.txt`
+- `README.md`
+
+No hace falta instalar nada en el equipo local; Streamlit lo desplegará desde GitHub.
