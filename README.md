@@ -1,35 +1,46 @@
-# Lector de partituras V5.2 — cabezas negras y blancas
+# Lector de partituras V5.3 — automático con revisión
 
-Aplicación web de Streamlit. Puedes subir una fotografía o captura de una partitura para clarinete, hacer clic sobre las cabezas de las notas y obtener una imagen con sus nombres (DO RE MI FA SOL LA SI) y una lista por compás.
+Aplicación web para Streamlit Community Cloud. Subes una imagen JPG/PNG de una partitura en clave de Sol y recibes sugerencias de notas musicales en DO–RE–MI–FA–SOL–LA–SI, una imagen anotada y una lista CSV por compás.
 
-## Mejoras de V5.2
+## Novedades de V5.3
 
-- **Notas negras:** mantiene el detector probado en V5.1 para óvalos rellenos.
-- **Notas blancas:** incorpora un detector del interior blanco rodeado por el contorno de tinta.
-- **Notas blancas sobre las líneas:** si el pentagrama divide el interior en dos huecos, combina ambos para estimar mejor el centro musical. Esto corrige varios casos en que FA se confundía con SOL.
-- **Clic tolerante:** la identificación no depende de pulsar exactamente en el centro, sino de la figura cercana.
-- **Controles que permanecen:** opción de desactivar el ajuste del clic, corrección de tabla, marcadores de compás y exportación a PNG o CSV.
+**Botón visible «Detectar notas automáticamente».** Busca cabezas de notas rellenas y contornos huecos mediante dos procedimientos independientes. Utiliza las cinco líneas detectadas para deducir la altura. Descarta zonas que parecen barras largas de silencio. No interpreta la canción por audio.
 
-## Subir a GitHub / Streamlit Cloud
+**Las sugerencias están diferenciadas por estado:**
 
-1. Abre el repositorio donde ya tienes el lector funcionando.
-2. Reemplaza `app.py`, `core.py`, `requirements.txt` y `README.md` por los de esta carpeta.
-3. Confirma con **Commit changes**. Streamlit Cloud actualizará la aplicación.
-4. Abre la página y comprueba que en el título se muestra **V5.2**.
+- **Azul — Probable:** la figura detectada parece una cabeza negra de nota. No está confirmada.
+- **Naranja y signo `?` — Dudosa:** detección insuficiente, especialmente notas blancas, huecos o figuras extrañas. Requiere tu revisión.
+- **Verde — Confirmada:** la revisaste y confirmaste tú; no significa que el software haya comprobado por sí mismo la exactitud.
 
-## Prueba recomendada
+**Cómo revisar:**
 
-Abre **Himno a la humildad** y marca una blanca, pulsando ligeramente por encima y por debajo de su cabeza. Repite con una blanca atravesada por una línea del pentagrama y después con una negra. La lectura asistida no añade notas automáticamente: debes indicarlas con clic.
+1. Sube la partitura y confirma la armadura (cantidad de sostenidos o bemoles).
+2. Deja la sensibilidad en **65** y haz clic en **Detectar notas automáticamente**.
+3. Selecciona pentagrama y mitad de página para ampliar. Selecciona **Confirmar propuesta cercana** y pulsa sobre las propuestas que reconozcas correctamente.
+4. Si no aparece una nota, utiliza **Añadir nota** con el clic asistido. Para una blanca que no encaja, desactiva el ajuste y corrige la nota en la tabla.
+5. En la tabla puedes editar el nombre de cada nota, su alteración manual y su estado de revisión.
+6. Descarga PNG y CSV. En CSV, el sufijo `?` significa dudosa y `~` significa probable pero pendiente de confirmar.
 
-## Limitaciones
+El botón **Eliminar propuestas sin confirmar** borra solo las propuestas azules y naranjas, preservando tus notas confirmadas.
 
-La detección geométrica sigue siendo experimental y depende de la nitidez de la imagen. Puede fallar con trazos desvaídos, manchas o partituras manuscritas. En esos casos, desactiva el ajuste del clic y corrige el nombre desde la tabla. Las armaduras se aplican mediante controles, pero las alteraciones locales no se leen automáticamente.
+## Instalación en GitHub
 
-## Ejecutar localmente (opcional)
+Sube o reemplaza los cuatro archivos **en la raíz** del mismo repositorio:
 
-```sh
+- `app.py`
+- `core.py`
+- `requirements.txt`
+- `README.md`
+
+Haz **Commit changes**. Streamlit Community Cloud desplegará la nueva versión desde GitHub. No necesitas instalar Python en tu PC.
+
+## Limitaciones y precauciones
+
+Este programa es un **prototipo de reconocimiento geométrico**, no un reconocedor de partituras entrenado ni validado. Puede omitir notas verdaderas e interpretar símbolos como notas; las **blancas pueden fallar más que las negras**. La puntuación llamada confianza es solo una **heurística interna**, NO un porcentaje de precisión. Un estado «Probable» no significa correcto. Las alteraciones accidentales junto a notas individuales no se detectan automáticamente y los compases requieren marcar barras en cada pentagrama. **No conviene utilizar la salida automática para interpretar música sin revisarla.**
+
+## Ejecución local opcional
+
+```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
-
-No necesitas instalar nada en tu computadora si usas el repositorio en Streamlit Cloud.
