@@ -1,27 +1,25 @@
-# Lector experimental de partituras — V4
+# Lector de partituras V5 — modo asistido
 
-Aplicación en Streamlit para subir una imagen de partitura, detectar notas aproximadas y producir:
+Corrección de la V4: **el reconocimiento automático no es fiable** y se deja como sugerencia opcional. El modo predeterminado es asistido: haces clic en la cabeza de la nota y el programa calcula su altura usando las cinco líneas del pentagrama.
 
-- una imagen anotada con nombres DO, RE, MI, FA, SOL, LA, SI;
-- una tabla editable de notas;
-- una lista agrupada por compás;
-- exportación a PNG y CSV.
+## Cómo usar
 
-## Cambios de V4
+1. Carga JPG o PNG.
+2. Selecciona armadura (por ejemplo 1 sostenido = FA♯).
+3. Selecciona pentagrama y mitad izquierda o derecha para ver las notas más grandes.
+4. Haz clic sobre **el centro de cada cabeza de nota**. Aparecerá el nombre.
+5. Para separar compases cambia la acción a **Marcar barra** y haz clic sobre las barras verticales.
+6. Para borrar una nota equivocada usa **Borrar nota cercana** o *Deshacer última nota*.
+7. Corrige nombre y alteración en la tabla y descarga PNG o CSV.
 
-- Ajuste de alturas usando la referencia de **clave de Sol**.
-- Exclusión más fuerte de la zona de clave, armadura y compás al inicio del sistema.
-- Detección por coincidencia de **cabezas de nota** (óvalos llenos y huecos).
-- Menos falsos positivos en textos y símbolos verticales.
-- Sensibilidad inicial en **65%**.
+## Avisos
 
-## Ejecución local
+- La detección automática heredada de V3 es experimental y no se ejecuta sola.
+- La lectura asistida identifica la altura según la clave de Sol (MI en la línea inferior). El nombre mostrado es el **escrito** para el instrumento, sin transponer a tono de concierto.
+- La armadura se aplica por selección del usuario; no se detectan los accidentales locales automáticamente.
+- Los números de compás son **locales a cada pentagrama** y requieren marcar sus barras para separar notas.
+- No hay que instalar nada en Windows si se ejecuta en Streamlit Cloud.
 
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
+## Despliegue
 
-## Nota
-
-Sigue siendo una herramienta experimental. Las armaduras, alteraciones, ligaduras y compases son aproximados y deben revisarse manualmente antes de usar la transcripción.
+Sube `app.py`, `core.py`, `requirements.txt` y `README.md` a la raíz del repositorio de GitHub y Streamlit recargará la app automáticamente.
